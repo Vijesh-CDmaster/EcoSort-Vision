@@ -13,7 +13,6 @@ import { Icons } from "@/components/icons";
 import { LayoutDashboard, Camera, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
 
 const menuItems = [
   {
@@ -50,7 +49,6 @@ export function AppSidebar() {
                 <SidebarMenuButton
                   isActive={pathname === item.href}
                   tooltip={item.label}
-                  asChild={false}
                 >
                   <item.icon className="w-5 h-5" />
                   <span data-sidebar-expanded-only="true">{item.label}</span>
