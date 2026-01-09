@@ -46,10 +46,11 @@ export function AppSidebar() {
         <SidebarMenu>
           {menuItems.map((item) => (
             <SidebarMenuItem key={item.label}>
-              <Link href={item.href} legacyBehavior passHref>
+              <Link href={item.href}>
                 <SidebarMenuButton
                   isActive={pathname === item.href}
                   tooltip={item.label}
+                  asChild={false}
                 >
                   <item.icon className="w-5 h-5" />
                   <span data-sidebar-expanded-only="true">{item.label}</span>
