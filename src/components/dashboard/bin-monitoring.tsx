@@ -28,10 +28,10 @@ const binData = [
     color: "text-blue-500",
     progressColor: "bg-blue-500",
     composition: [
-      { name: "Paper", percentage: 50 },
-      { name: "Plastics", percentage: 30 },
-      { name: "Glass", percentage: 15 },
-      { name: "Other", percentage: 5 },
+      { name: "Paper", percentage: 50, confidence: 0.95 },
+      { name: "Plastics", percentage: 30, confidence: 0.88 },
+      { name: "Glass", percentage: 15, confidence: 0.98 },
+      { name: "Other", percentage: 5, confidence: 0.70 },
     ],
     harmfulItems: ["Broken Glass"],
   },
@@ -42,9 +42,9 @@ const binData = [
     color: "text-green-500",
     progressColor: "bg-green-500",
     composition: [
-      { name: "Food Scraps", percentage: 80 },
-      { name: "Yard Waste", percentage: 15 },
-      { name: "Other", percentage: 5 },
+      { name: "Food Scraps", percentage: 80, confidence: 0.99 },
+      { name: "Yard Waste", percentage: 15, confidence: 0.92 },
+      { name: "Other", percentage: 5, confidence: 0.65 },
     ],
     harmfulItems: [],
   },
@@ -55,22 +55,25 @@ const binData = [
     color: "text-gray-500",
     progressColor: "bg-gray-500",
     composition: [
-      { name: "Non-recyclable plastics", percentage: 40 },
-      { name: "Styrofoam", percentage: 30 },
-      { name: "Other", percentage: 30 },
+      { name: "Non-recyclable plastics", percentage: 40, confidence: 0.91 },
+      { name: "Styrofoam", percentage: 30, confidence: 0.94 },
+      { name: "Other", percentage: 30, confidence: 0.75 },
     ],
     harmfulItems: ["Batteries", "Electronics"],
   },
 ];
 
-const WasteComposition = ({ composition }: { composition: { name: string, percentage: number }[] }) => (
+const WasteComposition = ({ composition }: { composition: { name: string, percentage: number, confidence: number }[] }) => (
     <div className="space-y-2 mt-4">
         <h4 className="text-sm font-medium text-muted-foreground">Waste Composition</h4>
         <ul className="space-y-1 text-sm">
             {composition.map(item => (
-                <li key={item.name} className="flex justify-between">
+                <li key={item.name} className="flex justify-between items-center">
                     <span>{item.name}</span>
-                    <span>{item.percentage}%</span>
+                    <div className="text-right">
+                      <div>{item.percentage}%</div>
+                      <div className="text-xs text-muted-foreground">Conf: {(item.confidence * 100).toFixed(0)}%</div>
+                    </div>
                 </li>
             ))}
         </ul>
