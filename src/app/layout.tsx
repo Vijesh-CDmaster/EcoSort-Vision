@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { Toaster } from "@/components/ui/toaster"
+import { AppProviders } from "@/components/providers/app-providers";
 
 export const metadata: Metadata = {
   title: 'EcoSort Vision',
@@ -23,16 +24,16 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
       </head>
       <body className={cn('font-body antialiased', 'min-h-screen bg-background font-sans')}>
-        <SidebarProvider>
-          <div className="flex min-h-screen">
-            <AppSidebar />
-            <SidebarInset className="flex-1">
-              <main className="p-4 md:p-6 lg:p-8">
-                {children}
-              </main>
-            </SidebarInset>
-          </div>
-        </SidebarProvider>
+        <AppProviders>
+          <SidebarProvider>
+            <div className="flex min-h-screen">
+              <AppSidebar />
+              <SidebarInset className="flex-1">
+                <main className="p-4 md:p-6 lg:p-8">{children}</main>
+              </SidebarInset>
+            </div>
+          </SidebarProvider>
+        </AppProviders>
         <Toaster />
       </body>
     </html>

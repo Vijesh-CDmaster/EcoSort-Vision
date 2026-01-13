@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import React from "react";
 import {
   Card,
   CardContent,
@@ -15,50 +15,46 @@ import { AlertTriangle, Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { useScanStore, type WasteBin } from "@/components/scan/scan-store";
 
-
-const binData = [
-  {
+const binMeta = {
+  recycling: {
     name: "Recycling",
-    level: 78,
     icon: Icons.Recycling,
     color: "text-blue-500",
     progressColor: "bg-blue-500",
-    composition: [
-      { name: "Paper", percentage: 50, confidence: 0.95 },
-      { name: "Plastics", percentage: 30, confidence: 0.88 },
-      { name: "Glass", percentage: 15, confidence: 0.98 },
-      { name: "Other", percentage: 5, confidence: 0.70 },
-    ],
-    harmfulItems: ["Broken Glass"],
   },
-  {
+  compost: {
     name: "Compost",
-    level: 45,
     icon: Icons.Compost,
     color: "text-green-500",
     progressColor: "bg-green-500",
-    composition: [
-      { name: "Food Scraps", percentage: 80, confidence: 0.99 },
-      { name: "Yard Waste", percentage: 15, confidence: 0.92 },
-      { name: "Other", percentage: 5, confidence: 0.65 },
-    ],
-    harmfulItems: [],
   },
-  {
+  landfill: {
     name: "Landfill",
-    level: 62,
     icon: Icons.Landfill,
     color: "text-gray-500",
     progressColor: "bg-gray-500",
-    composition: [
-      { name: "Non-recyclable plastics", percentage: 40, confidence: 0.91 },
-      { name: "Styrofoam", percentage: 30, confidence: 0.94 },
-      { name: "Other", percentage: 30, confidence: 0.75 },
-    ],
-    harmfulItems: ["Batteries", "Electronics"],
   },
-];
+} satisfies Record<WasteBin, any>;
+
+function clampPercent(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, n));
+}
+
+function computeBinLevel(scansCount: number) {
+  // Simple demo heuristic: each scan adds ~5% until full.
+  return clampPercent(scansCount * 5);
+}
+
+function titleCase(s: string) {
+  return s
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
 const WasteComposition = ({ composition }: { composition: { name: string, percentage: number, confidence: number }[] }) => (
     <div className="space-y-2">
@@ -79,6 +75,69 @@ const WasteComposition = ({ composition }: { composition: { name: string, percen
 
 
 export function BinMonitoring() {
+  const { scans } = useScanStore();
+
+  const byBin = React.useMemo(() => {
+    const groups: Record<WasteBin, typeof scans> = { recycling: [], compost: [], landfill: [] };
+    for (const s of scans) groups[s.binSuggestion]?.push(s);
+    return groups;
+  }, [scans]);
+
+  const binData = React.useMemo(() => {
+    const bins: Array<{
+      key: WasteBin;
+      name: string;
+      level: number;
+      icon: any;
+      color: string;
+      progressColor: string;
+      composition: { name: string; percentage: number; confidence: number }[];
+      harmfulItems: string[];
+    }> = [];
+
+    (Object.keys(binMeta) as WasteBin[]).forEach((binKey) => {
+      const binScans = byBin[binKey] ?? [];
+      const level = computeBinLevel(binScans.length);
+
+      // Build composition from recent detections.
+      const counts = new Map<string, { count: number; confSum: number }>();
+      for (const s of binScans.slice(0, 50)) {
+        const label = titleCase(s.wasteType || "unknown");
+        const prev = counts.get(label) ?? { count: 0, confSum: 0 };
+        counts.set(label, { count: prev.count + 1, confSum: prev.confSum + (s.wasteTypeConfidence ?? 0) });
+      }
+
+      const total = Array.from(counts.values()).reduce((a, v) => a + v.count, 0);
+      const composition = Array.from(counts.entries())
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 4)
+        .map(([name, v]) => ({
+          name,
+          percentage: total > 0 ? Math.round((v.count / total) * 100) : 0,
+          confidence: v.count > 0 ? v.confSum / v.count : 0,
+        }));
+
+      // Demo rule: flag low-confidence scans as "harmful" requiring review.
+      const harmfulItems = binScans
+        .filter(s => (s.binConfidence ?? 0) < 0.35)
+        .slice(0, 3)
+        .map(s => titleCase(s.wasteType || "unknown"));
+
+      bins.push({
+        key: binKey,
+        name: binMeta[binKey].name,
+        level,
+        icon: binMeta[binKey].icon,
+        color: binMeta[binKey].color,
+        progressColor: binMeta[binKey].progressColor,
+        composition: composition.length > 0 ? composition : [{ name: "No data yet", percentage: 0, confidence: 0 }],
+        harmfulItems,
+      });
+    });
+
+    return bins;
+  }, [byBin]);
+
   return (
     <Card>
       <CardHeader>

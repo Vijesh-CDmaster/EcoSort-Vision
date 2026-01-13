@@ -53,6 +53,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
+import { useScanStore } from "@/components/scan/scan-store";
 
 type Alert = {
   id: string;
@@ -66,41 +67,43 @@ type Alert = {
   imageUrl: string;
 };
 
-const alertData: Alert[] = [
-  {
-    id: "alert-001",
-    type: "Contamination",
-    description: "A plastic bag was found in the paper recycling stream.",
-    severity: "high",
-    timestamp: 1666888320000,
-    bin: "Recycling",
-    contaminant: "Plastic Bag",
-    status: "new",
-    imageUrl: PlaceHolderImages.find(p => p.id === 'scanner-placeholder')?.imageUrl || '',
-  },
-  {
-    id: "alert-002",
-    type: "Bin Full",
-    description: "The main landfill bin is now at 95% capacity.",
-    severity: "medium",
-    timestamp: 1666887240000,
-    bin: "Landfill",
-    contaminant: "N/A",
-    status: "new",
-    imageUrl: '',
-  },
-  {
-    id: "alert-003",
-    type: "Contamination",
-    description: "A glass bottle was identified in the compost bin.",
-    severity: "high",
-    timestamp: 1666884900000,
-    bin: "Compost",
-    contaminant: "Glass Bottle",
-    status: "acknowledged",
-    imageUrl: PlaceHolderImages.find(p => p.id === 'scanner-placeholder')?.imageUrl || '',
-  },
-];
+function toBinLabel(bin: string): Alert["bin"] {
+  if (bin === "compost") return "Compost";
+  if (bin === "recycling") return "Recycling";
+  return "Landfill";
+}
+
+function titleCase(s: string) {
+  return s
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function deriveAlertsFromScans(scans: Array<{ id: string; timestamp: number; binSuggestion: any; wasteType: string; binConfidence: number; imageUrl: string }>): Alert[] {
+  const alerts: Alert[] = [];
+  for (const s of scans.slice(0, 50)) {
+    const lowConf = (s.binConfidence ?? 0) < 0.35;
+    if (!lowConf) continue;
+
+    const contaminant = titleCase(s.wasteType || "unknown");
+    const bin = toBinLabel(String(s.binSuggestion));
+
+    alerts.push({
+      id: `scan-${s.id}`,
+      type: "Contamination",
+      description: `Low-confidence item detected (${contaminant}). Please review before processing.`,
+      severity: "high",
+      timestamp: s.timestamp,
+      bin,
+      contaminant,
+      status: "new",
+      imageUrl: s.imageUrl || PlaceHolderImages.find(p => p.id === 'scanner-placeholder')?.imageUrl || '',
+    });
+  }
+  return alerts;
+}
 
 const SeverityBadge = ({ severity }: { severity: Alert["severity"] }) => {
   const variant = {
@@ -163,17 +166,19 @@ const FormattedDate = ({ timestamp }: { timestamp: number }) => {
 };
 
 export function ContaminationAlerts() {
-  const [data, setData] = React.useState(alertData);
+  const { scans } = useScanStore();
+  const [acknowledged, setAcknowledged] = React.useState<Record<string, boolean>>({});
+
+  const data = React.useMemo(() => {
+    const derived = deriveAlertsFromScans(scans as any);
+    return derived.map(a => (acknowledged[a.id] ? { ...a, status: "acknowledged" as const } : a));
+  }, [scans, acknowledged]);
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
 
   const acknowledgeAlert = (id: string) => {
-    setData(currentData => 
-        currentData.map(alert => 
-            alert.id === id ? { ...alert, status: "acknowledged" } : alert
-        )
-    );
+    setAcknowledged(prev => ({ ...prev, [id]: true }));
   };
   
   const columns: ColumnDef<Alert>[] = [

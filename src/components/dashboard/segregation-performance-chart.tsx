@@ -16,10 +16,12 @@ import {
 } from "@/components/ui/chart"
 import { TrendingUp } from "lucide-react";
 
-const chartData = [
-  { type: "Correct", value: 489, fill: "hsl(var(--chart-1))" },
-  { type: "Incorrect", value: 45, fill: "hsl(var(--chart-2))" },
-]
+import { useScanStore } from "@/components/scan/scan-store";
+
+function clamp01(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(1, n));
+}
 
 const chartConfig = {
     value: {
@@ -36,9 +38,21 @@ const chartConfig = {
 }
 
 export function SegregationPerformanceChart() {
+  const { scans } = useScanStore();
+
+  const chartData = React.useMemo(() => {
+    // Proxy metric: treat each scan's binConfidence as "probability correct".
+    const correct = scans.reduce((acc, s) => acc + clamp01(s.binConfidence ?? 0), 0);
+    const incorrect = scans.reduce((acc, s) => acc + (1 - clamp01(s.binConfidence ?? 0)), 0);
+    return [
+      { type: "Correct", value: Math.round(correct * 100), fill: "hsl(var(--chart-1))" },
+      { type: "Incorrect", value: Math.round(incorrect * 100), fill: "hsl(var(--chart-2))" },
+    ];
+  }, [scans]);
+
   const totalValue = React.useMemo(() => {
     return chartData.reduce((acc, curr) => acc + curr.value, 0)
-  }, [])
+  }, [chartData])
   
   const accuracy = totalValue > 0 ? ((chartData[0].value / totalValue) * 100).toFixed(1) : "0.0";
 
@@ -76,7 +90,9 @@ export function SegregationPerformanceChart() {
                         <li key={`item-${index}`} className="flex items-center gap-1.5">
                         <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
                         <span>{entry.value}</span>
-                        <span>({((entry.payload.value / totalValue) * 100).toFixed(1)}%)</span>
+                  <span>
+                    ({(((Number((entry as any)?.payload?.value ?? 0) / Math.max(1, totalValue)) * 100)).toFixed(1)}%)
+                  </span>
                         </li>
                     ))}
                     </ul>

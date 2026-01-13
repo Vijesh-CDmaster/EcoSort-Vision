@@ -16,6 +16,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useCamera } from "@/hooks/use-camera";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { useScanStore } from "@/components/scan/scan-store";
 
 type ScanResult = {
   wasteType: string;
@@ -72,6 +73,7 @@ export function WasteScanner() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [recentScans, setRecentScans] = useState<ScanResult[]>([]);
+  const { addScan } = useScanStore();
   
   const {
     videoRef,
@@ -205,6 +207,15 @@ export function WasteScanner() {
       
       setResult(newResult);
       setRecentScans(prev => [newResult, ...prev.slice(0, 4)]);
+      addScan({
+        source: isCameraOn ? "camera" : "upload",
+        wasteType: newResult.wasteType,
+        wasteTypeConfidence: newResult.wasteTypeConfidence,
+        binSuggestion: newResult.binSuggestion,
+        binConfidence: newResult.binConfidence,
+        imageUrl: newResult.imageUrl,
+        detections: newResult.detections,
+      });
 
     } catch (error) {
       console.error("AI classification failed:", error);
