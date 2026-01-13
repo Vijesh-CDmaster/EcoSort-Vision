@@ -21,7 +21,7 @@ const stats = [
   },
   {
     title: "Segregation Accuracy",
-    value: "92%",
+    value: "92.1%",
     description: "Aiming for 95%",
     icon: Target,
   },

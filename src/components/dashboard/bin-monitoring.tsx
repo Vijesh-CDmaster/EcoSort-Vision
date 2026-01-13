@@ -1,3 +1,6 @@
+
+"use client";
+
 import {
   Card,
   CardContent,
@@ -7,6 +10,15 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Icons } from "@/components/icons";
+import { AlertTriangle, Info } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
+
 
 const binData = [
   {
@@ -15,6 +27,13 @@ const binData = [
     icon: Icons.Recycling,
     color: "text-blue-500",
     progressColor: "bg-blue-500",
+    composition: [
+      { name: "Paper", percentage: 50 },
+      { name: "Plastics", percentage: 30 },
+      { name: "Glass", percentage: 15 },
+      { name: "Other", percentage: 5 },
+    ],
+    harmfulItems: ["Broken Glass"],
   },
   {
     name: "Compost",
@@ -22,6 +41,12 @@ const binData = [
     icon: Icons.Compost,
     color: "text-green-500",
     progressColor: "bg-green-500",
+    composition: [
+      { name: "Food Scraps", percentage: 80 },
+      { name: "Yard Waste", percentage: 15 },
+      { name: "Other", percentage: 5 },
+    ],
+    harmfulItems: [],
   },
   {
     name: "Landfill",
@@ -29,29 +54,71 @@ const binData = [
     icon: Icons.Landfill,
     color: "text-gray-500",
     progressColor: "bg-gray-500",
+    composition: [
+      { name: "Non-recyclable plastics", percentage: 40 },
+      { name: "Styrofoam", percentage: 30 },
+      { name: "Other", percentage: 30 },
+    ],
+    harmfulItems: ["Batteries", "Electronics"],
   },
 ];
+
+const WasteComposition = ({ composition }: { composition: { name: string, percentage: number }[] }) => (
+    <div className="space-y-2 mt-4">
+        <h4 className="text-sm font-medium text-muted-foreground">Waste Composition</h4>
+        <ul className="space-y-1 text-sm">
+            {composition.map(item => (
+                <li key={item.name} className="flex justify-between">
+                    <span>{item.name}</span>
+                    <span>{item.percentage}%</span>
+                </li>
+            ))}
+        </ul>
+    </div>
+);
+
 
 export function BinMonitoring() {
   return (
     <Card>
       <CardHeader>
         <CardTitle>Bin Monitoring</CardTitle>
-        <CardDescription>Real-time waste bin fullness levels.</CardDescription>
+        <CardDescription>Real-time waste bin status and composition.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {binData.map((bin) => (
-          <div key={bin.name}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <bin.icon className={`w-5 h-5 ${bin.color}`} />
-                <span className="font-medium">{bin.name}</span>
-              </div>
-              <span className="text-sm text-muted-foreground">{bin.level}% Full</span>
-            </div>
-            <Progress value={bin.level} aria-label={`${bin.name} bin fullness`} indicatorClassName={bin.progressColor} />
-          </div>
-        ))}
+      <CardContent>
+        <Accordion type="single" collapsible defaultValue="item-0">
+          {binData.map((bin, index) => (
+            <AccordionItem key={bin.name} value={`item-${index}`}>
+              <AccordionTrigger>
+                 <div className="flex items-center gap-4 w-full">
+                    <bin.icon className={`w-6 h-6 ${bin.color}`} />
+                    <div className="flex-1 text-left">
+                        <span className="font-semibold">{bin.name}</span>
+                        <div className="flex items-center gap-2 mt-1">
+                            <Progress value={bin.level} aria-label={`${bin.name} bin fullness`} className="h-2" indicatorClassName={bin.progressColor} />
+                            <span className="text-xs text-muted-foreground w-16 text-right">{bin.level}% Full</span>
+                        </div>
+                    </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-2">
+                 <div className="space-y-4">
+                    <WasteComposition composition={bin.composition} />
+
+                    {bin.harmfulItems.length > 0 && (
+                        <Alert variant="destructive">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle>Harmful Items Detected!</AlertTitle>
+                            <AlertDescription>
+                                The following items require special handling: {bin.harmfulItems.join(", ")}.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                 </div>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
       </CardContent>
     </Card>
   );
