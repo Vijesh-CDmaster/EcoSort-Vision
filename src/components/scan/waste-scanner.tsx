@@ -1,12 +1,10 @@
 "use client";
 
-import React, { useState, useRef, useMemo, useEffect } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { identifyWasteType } from "@/ai/flows/waste-type-identification";
-import { wasteBinClassification } from "@/ai/flows/waste-bin-classification";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Upload, X, Loader2, Sparkles, Camera, Video, FlipHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -69,7 +67,6 @@ export function WasteScanner() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [genkitEnabled, setGenkitEnabled] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [recentScans, setRecentScans] = useState<ScanResult[]>([]);
@@ -86,14 +83,6 @@ export function WasteScanner() {
   } = useCamera();
 
   const placeholderImage = useMemo(() => PlaceHolderImages.find(p => p.id === 'scanner-placeholder'), []);
-
-  useEffect(() => {
-    // Check whether Genkit is configured on the server (API key present).
-    fetch("/api/genkit/enabled")
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => setGenkitEnabled(Boolean(d?.enabled)))
-      .catch(() => setGenkitEnabled(false));
-  }, []);
 
   const handleFileChange = (selectedFile: File | null) => {
     if (selectedFile) {
@@ -128,7 +117,7 @@ export function WasteScanner() {
     setIsLoading(true);
     setResult(null);
     try {
-      // Prefer the local YOLO model if available, fallback to Genkit AI.
+      // Classify using the local YOLO model service.
       let newResult: ScanResult | null = null;
       let yoloFailure: string | null = null;
 
@@ -187,22 +176,10 @@ export function WasteScanner() {
       }
 
       if (!newResult) {
-        if (genkitEnabled) {
-          const [typeResult, binResult] = await Promise.all([
-            identifyWasteType({ photoDataUri: imageUrl }),
-            wasteBinClassification({ photoDataUri: imageUrl }),
-          ]);
-
-          newResult = {
-            wasteType: typeResult.wasteType,
-            wasteTypeConfidence: typeResult.confidence,
-            binSuggestion: binResult.binSuggestion,
-            binConfidence: binResult.confidence,
-            imageUrl: imageUrl,
-          };
-        } else {
-          throw new Error(yoloFailure || "YOLO inference failed");
-        }
+        throw new Error(
+          yoloFailure ||
+            "YOLO inference failed. Start the python service: cd yolo-service; python -m uvicorn app:app --reload --port 8000"
+        );
       }
       
       setResult(newResult);

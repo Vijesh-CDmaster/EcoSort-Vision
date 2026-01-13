@@ -40,4 +40,4 @@ python -m uvicorn app:app --reload --port 8000
 
 Set environment variable `YOLO_SERVICE_URL` (default is `http://127.0.0.1:8000`).
 
-The Waste Scanner will prefer YOLO first, and fall back to the existing Genkit flows if the YOLO service is not running.
+The Waste Scanner uses the local YOLO service for classification. Ensure the YOLO service is running before scanning.
