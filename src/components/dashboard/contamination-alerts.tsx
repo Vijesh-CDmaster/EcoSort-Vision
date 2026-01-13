@@ -112,37 +112,55 @@ const SeverityBadge = ({ severity }: { severity: Alert["severity"] }) => {
   return <Badge variant={variant}>{severity}</Badge>;
 };
 
-const ContaminationDetailsDialog = ({ alert }: { alert: Alert }) => (
-  <AlertDialogContent>
-    <AlertDialogHeader>
-      <AlertDialogTitle>Alert Details: {alert.id}</AlertDialogTitle>
-      <AlertDialogDescription>
-        Detailed information about the contamination event.
-      </AlertDialogDescription>
-    </AlertDialogHeader>
-    <div className="space-y-4">
-      <div className="relative aspect-video rounded-lg overflow-hidden">
-        {alert.imageUrl ? (
-            <Image
-                src={alert.imageUrl}
-                alt={`Contamination image for ${alert.id}`}
-                layout="fill"
-                objectFit="cover"
-            />
-        ) : <div className="bg-muted h-full w-full flex items-center justify-center"><p className="text-muted-foreground">No image</p></div> }
-      </div>
-      <div>
-        <p><strong>Bin:</strong> {alert.bin}</p>
-        <p><strong>Contaminant:</strong> {alert.contaminant}</p>
-        <p><strong>Time:</strong> {new Date(alert.timestamp).toLocaleString()}</p>
-        <p><strong>Severity:</strong> <span className="capitalize">{alert.severity}</span></p>
-      </div>
-    </div>
-    <AlertDialogFooter>
-      <AlertDialogCancel>Close</AlertDialogCancel>
-    </AlertDialogFooter>
-  </AlertDialogContent>
-);
+const ContaminationDetailsDialog = ({ alert }: { alert: Alert }) => {
+    const [formattedDate, setFormattedDate] = React.useState('');
+
+    React.useEffect(() => {
+        setFormattedDate(new Date(alert.timestamp).toLocaleString());
+    }, [alert.timestamp]);
+
+    return (
+        <AlertDialogContent>
+        <AlertDialogHeader>
+            <AlertDialogTitle>Alert Details: {alert.id}</AlertDialogTitle>
+            <AlertDialogDescription>
+            Detailed information about the contamination event.
+            </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-4">
+            <div className="relative aspect-video rounded-lg overflow-hidden">
+            {alert.imageUrl ? (
+                <Image
+                    src={alert.imageUrl}
+                    alt={`Contamination image for ${alert.id}`}
+                    fill
+                    objectFit="cover"
+                />
+            ) : <div className="bg-muted h-full w-full flex items-center justify-center"><p className="text-muted-foreground">No image</p></div> }
+            </div>
+            <div>
+            <p><strong>Bin:</strong> {alert.bin}</p>
+            <p><strong>Contaminant:</strong> {alert.contaminant}</p>
+            <p><strong>Time:</strong> {formattedDate}</p>
+            <p><strong>Severity:</strong> <span className="capitalize">{alert.severity}</span></p>
+            </div>
+        </div>
+        <AlertDialogFooter>
+            <AlertDialogCancel>Close</AlertDialogCancel>
+        </AlertDialogFooter>
+        </AlertDialogContent>
+    );
+};
+
+const FormattedDate = ({ timestamp }: { timestamp: number }) => {
+    const [formattedDate, setFormattedDate] = React.useState('');
+  
+    React.useEffect(() => {
+      setFormattedDate(new Date(timestamp).toLocaleString());
+    }, [timestamp]);
+  
+    return <div>{formattedDate}</div>;
+};
 
 export function ContaminationAlerts() {
   const [data, setData] = React.useState(alertData);
@@ -185,7 +203,7 @@ export function ContaminationAlerts() {
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => <div>{new Date(row.getValue("timestamp")).toLocaleString()}</div>,
+      cell: ({ row }) => <FormattedDate timestamp={row.getValue("timestamp")} />,
     },
     {
         accessorKey: "bin",
@@ -248,6 +266,11 @@ export function ContaminationAlerts() {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
+    initialState: {
+        pagination: {
+            pageSize: 5,
+        },
+    },
     state: {
       sorting,
       columnFilters,
