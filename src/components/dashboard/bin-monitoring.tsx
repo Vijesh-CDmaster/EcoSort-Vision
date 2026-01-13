@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Icons } from "@/components/icons";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -114,7 +114,7 @@ export function BinMonitoring() {
                            <WasteComposition composition={bin.composition} />
                         </div>
                         <div>
-                          {bin.harmfulItems.length > 0 && (
+                          {bin.harmfulItems.length > 0 ? (
                               <Alert variant="destructive">
                                   <AlertTriangle className="h-4 w-4" />
                                   <AlertTitle>Harmful Items Detected!</AlertTitle>
@@ -122,6 +122,14 @@ export function BinMonitoring() {
                                       The following items require special handling: {bin.harmfulItems.join(", ")}.
                                   </AlertDescription>
                               </Alert>
+                          ) : (
+                            <Alert>
+                                <Info className="h-4 w-4" />
+                                <AlertTitle>No Harmful Items</AlertTitle>
+                                <AlertDescription>
+                                    No harmful items have been detected in this bin.
+                                </AlertDescription>
+                            </Alert>
                           )}
                         </div>
                      </div>
