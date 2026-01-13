@@ -61,7 +61,7 @@ const binData = [
 ];
 
 const WasteComposition = ({ composition }: { composition: { name: string, percentage: number, confidence: number }[] }) => (
-    <div className="space-y-2 mt-4">
+    <div className="space-y-2">
         <h4 className="text-sm font-medium text-muted-foreground">Waste Composition</h4>
         <ul className="space-y-1 text-sm">
             {composition.map(item => (
@@ -109,18 +109,21 @@ export function BinMonitoring() {
                             </div>
                         </div>
                     </div>
-                    <div className="space-y-4">
-                        <WasteComposition composition={bin.composition} />
-
-                        {bin.harmfulItems.length > 0 && (
-                            <Alert variant="destructive">
-                                <AlertTriangle className="h-4 w-4" />
-                                <AlertTitle>Harmful Items Detected!</AlertTitle>
-                                <AlertDescription>
-                                    The following items require special handling: {bin.harmfulItems.join(", ")}.
-                                </AlertDescription>
-                            </Alert>
-                        )}
+                    <div className="grid md:grid-cols-2 gap-6 items-start">
+                        <div>
+                           <WasteComposition composition={bin.composition} />
+                        </div>
+                        <div>
+                          {bin.harmfulItems.length > 0 && (
+                              <Alert variant="destructive">
+                                  <AlertTriangle className="h-4 w-4" />
+                                  <AlertTitle>Harmful Items Detected!</AlertTitle>
+                                  <AlertDescription>
+                                      The following items require special handling: {bin.harmfulItems.join(", ")}.
+                                  </AlertDescription>
+                              </Alert>
+                          )}
+                        </div>
                      </div>
                 </CardContent>
               </Card>
