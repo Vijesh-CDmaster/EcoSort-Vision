@@ -1,6 +1,7 @@
 
 "use client";
 
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -10,14 +11,10 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Icons } from "@/components/icons";
-import { AlertTriangle, Info } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 
 
 const binData = [
@@ -89,39 +86,47 @@ export function BinMonitoring() {
         <CardDescription>Real-time waste bin status and composition.</CardDescription>
       </CardHeader>
       <CardContent>
-        <Accordion type="single" collapsible defaultValue="item-0">
-          {binData.map((bin, index) => (
-            <AccordionItem key={bin.name} value={`item-${index}`}>
-              <AccordionTrigger>
-                 <div className="flex items-center gap-4 w-full">
-                    <bin.icon className={`w-6 h-6 ${bin.color}`} />
-                    <div className="flex-1 text-left">
-                        <span className="font-semibold">{bin.name}</span>
-                        <div className="flex items-center gap-2 mt-1">
-                            <Progress value={bin.level} aria-label={`${bin.name} bin fullness`} className="h-2" indicatorClassName={bin.progressColor} />
-                            <span className="text-xs text-muted-foreground w-16 text-right">{bin.level}% Full</span>
+        <Tabs defaultValue="Recycling" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            {binData.map((bin) => (
+              <TabsTrigger key={bin.name} value={bin.name}>
+                <bin.icon className={cn("mr-2 h-4 w-4", bin.color)} />
+                {bin.name}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {binData.map((bin) => (
+            <TabsContent key={bin.name} value={bin.name}>
+              <Card className="mt-4">
+                <CardContent className="p-6">
+                    <div className="flex items-center gap-4 w-full mb-4">
+                        <bin.icon className={`w-10 h-10 ${bin.color}`} />
+                        <div className="flex-1 text-left">
+                            <span className="text-xl font-bold">{bin.name}</span>
+                            <div className="flex items-center gap-2 mt-1">
+                                <Progress value={bin.level} aria-label={`${bin.name} bin fullness`} className="h-3" indicatorClassName={bin.progressColor} />
+                                <span className="text-sm font-semibold w-16 text-right">{bin.level}% Full</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="px-2">
-                 <div className="space-y-4">
-                    <WasteComposition composition={bin.composition} />
+                    <div className="space-y-4">
+                        <WasteComposition composition={bin.composition} />
 
-                    {bin.harmfulItems.length > 0 && (
-                        <Alert variant="destructive">
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertTitle>Harmful Items Detected!</AlertTitle>
-                            <AlertDescription>
-                                The following items require special handling: {bin.harmfulItems.join(", ")}.
-                            </AlertDescription>
-                        </Alert>
-                    )}
-                 </div>
-              </AccordionContent>
-            </AccordionItem>
+                        {bin.harmfulItems.length > 0 && (
+                            <Alert variant="destructive">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertTitle>Harmful Items Detected!</AlertTitle>
+                                <AlertDescription>
+                                    The following items require special handling: {bin.harmfulItems.join(", ")}.
+                                </AlertDescription>
+                            </Alert>
+                        )}
+                     </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
           ))}
-        </Accordion>
+        </Tabs>
       </CardContent>
     </Card>
   );
