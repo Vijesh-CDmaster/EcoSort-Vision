@@ -1,7 +1,7 @@
-import { BinMonitoring } from "@/components/dashboard/bin-monitoring";
-import { ContaminationAlerts } from "@/components/dashboard/contamination-alerts";
 import { SegregationPerformanceChart } from "@/components/dashboard/segregation-performance-chart";
 import { StatsCards } from "@/components/dashboard/stats-cards";
+import { BinMonitoring } from "@/components/dashboard/bin-monitoring";
+import { ContaminationAlerts } from "@/components/dashboard/contamination-alerts";
 
 export default function DashboardPage() {
   return (

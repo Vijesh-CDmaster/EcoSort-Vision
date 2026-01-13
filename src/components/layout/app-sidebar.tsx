@@ -10,7 +10,7 @@ import {
   SidebarContent,
 } from "@/components/ui/sidebar";
 import { Icons } from "@/components/icons";
-import { LayoutDashboard, Camera, UserCircle } from "lucide-react";
+import { LayoutDashboard, Camera, AlertTriangle, Trash2, PieChart, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -21,9 +21,24 @@ const menuItems = [
     icon: LayoutDashboard,
   },
   {
-    href: "/scan",
-    label: "Scan Waste",
+    href: "/waste-detection",
+    label: "Waste Detection",
     icon: Camera,
+  },
+  {
+    href: "/contamination-alerts",
+    label: "Contamination Alerts",
+    icon: AlertTriangle,
+  },
+  {
+    href: "/bin-monitoring",
+    label: "Bin Monitoring",
+    icon: Trash2,
+  },
+  {
+    href: "/segregation-performance",
+    label: "Segregation Performance",
+    icon: PieChart,
   },
 ];
 

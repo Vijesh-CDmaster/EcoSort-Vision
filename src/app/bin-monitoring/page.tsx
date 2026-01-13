@@ -1,17 +1,17 @@
-import { WasteScanner } from "@/components/scan/waste-scanner";
+import { BinMonitoring } from "@/components/dashboard/bin-monitoring";
 
-export default function ScanPage() {
+export default function BinMonitoringPage() {
   return (
     <div className="space-y-8">
       <div className="space-y-2">
         <h1 className="text-3xl font-bold tracking-tight font-headline">
-          Scan Waste
+          Bin Monitoring
         </h1>
         <p className="text-muted-foreground">
-          Use your device camera or upload an image to identify waste and find the correct bin.
+          Check real-time fullness levels of your waste bins.
         </p>
       </div>
-      <WasteScanner />
+      <BinMonitoring />
     </div>
   );
 }
