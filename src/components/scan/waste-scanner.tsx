@@ -23,7 +23,27 @@ type ScanResult = {
   binSuggestion: "recycling" | "compost" | "landfill";
   binConfidence: number;
   imageUrl: string;
+  detections?: Array<{ label: string; confidence: number }>;
 };
+
+function guessBinFromLabel(label: string): "recycling" | "compost" | "landfill" {
+  const l = label.toLowerCase();
+  if (
+    l.includes("paper") ||
+    l.includes("cardboard") ||
+    l.includes("plastic") ||
+    l.includes("metal") ||
+    l.includes("glass") ||
+    l.includes("can") ||
+    l.includes("bottle")
+  ) {
+    return "recycling";
+  }
+  if (l.includes("food") || l.includes("organic") || l.includes("compost") || l.includes("fruit") || l.includes("vegetable")) {
+    return "compost";
+  }
+  return "landfill";
+}
 
 const binInfo = {
   recycling: {
@@ -48,6 +68,7 @@ export function WasteScanner() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [genkitEnabled, setGenkitEnabled] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [recentScans, setRecentScans] = useState<ScanResult[]>([]);
@@ -63,6 +84,14 @@ export function WasteScanner() {
   } = useCamera();
 
   const placeholderImage = useMemo(() => PlaceHolderImages.find(p => p.id === 'scanner-placeholder'), []);
+
+  useEffect(() => {
+    // Check whether Genkit is configured on the server (API key present).
+    fetch("/api/genkit/enabled")
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setGenkitEnabled(Boolean(d?.enabled)))
+      .catch(() => setGenkitEnabled(false));
+  }, []);
 
   const handleFileChange = (selectedFile: File | null) => {
     if (selectedFile) {
@@ -97,18 +126,82 @@ export function WasteScanner() {
     setIsLoading(true);
     setResult(null);
     try {
-      const [typeResult, binResult] = await Promise.all([
-        identifyWasteType({ photoDataUri: imageUrl }),
-        wasteBinClassification({ photoDataUri: imageUrl }),
-      ]);
-      
-      const newResult = {
-        wasteType: typeResult.wasteType,
-        wasteTypeConfidence: typeResult.confidence,
-        binSuggestion: binResult.binSuggestion,
-        binConfidence: binResult.confidence,
-        imageUrl: imageUrl,
-      };
+      // Prefer the local YOLO model if available, fallback to Genkit AI.
+      let newResult: ScanResult | null = null;
+      let yoloFailure: string | null = null;
+
+      try {
+        const yoloRes = await fetch("/api/yolo/predict", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ image: imageUrl }),
+        });
+
+        if (yoloRes.ok) {
+          const yoloData = await yoloRes.json();
+          const top = yoloData?.top;
+          const detections = Array.isArray(yoloData?.detections) ? yoloData.detections : [];
+
+          if (top?.label) {
+            const wasteType = String(top.label);
+            const wasteTypeConfidence = Number(top.confidence ?? 0);
+            const binSuggestion = guessBinFromLabel(wasteType);
+
+            newResult = {
+              wasteType,
+              wasteTypeConfidence,
+              binSuggestion,
+              binConfidence: wasteTypeConfidence,
+              imageUrl,
+              detections: detections
+                .slice(0, 5)
+                .map((d: any) => ({ label: String(d.label), confidence: Number(d.confidence ?? 0) })),
+            };
+          } else {
+            // Model responded but didn't detect anything.
+            yoloFailure = "No object detected. Try moving closer or improving lighting.";
+            newResult = {
+              wasteType: "unknown",
+              wasteTypeConfidence: 0,
+              binSuggestion: "landfill",
+              binConfidence: 0,
+              imageUrl,
+              detections: detections
+                .slice(0, 5)
+                .map((d: any) => ({ label: String(d.label), confidence: Number(d.confidence ?? 0) })),
+            };
+            toast({
+              variant: "destructive",
+              title: "No Detection",
+              description: yoloFailure,
+            });
+          }
+        } else {
+          const err = await yoloRes.json().catch(() => null);
+          yoloFailure = err?.error ? String(err.error) : `YOLO service returned ${yoloRes.status}`;
+        }
+      } catch (e) {
+        yoloFailure = "Could not reach YOLO service";
+      }
+
+      if (!newResult) {
+        if (genkitEnabled) {
+          const [typeResult, binResult] = await Promise.all([
+            identifyWasteType({ photoDataUri: imageUrl }),
+            wasteBinClassification({ photoDataUri: imageUrl }),
+          ]);
+
+          newResult = {
+            wasteType: typeResult.wasteType,
+            wasteTypeConfidence: typeResult.confidence,
+            binSuggestion: binResult.binSuggestion,
+            binConfidence: binResult.confidence,
+            imageUrl: imageUrl,
+          };
+        } else {
+          throw new Error(yoloFailure || "YOLO inference failed");
+        }
+      }
       
       setResult(newResult);
       setRecentScans(prev => [newResult, ...prev.slice(0, 4)]);
@@ -118,19 +211,28 @@ export function WasteScanner() {
       toast({
         variant: "destructive",
         title: "Scan Failed",
-        description: "Could not classify the item. Please try again.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Could not classify the item. Ensure the YOLO service is running (http://127.0.0.1:8000/health).",
       });
     } finally {
       setIsLoading(false);
     }
   };
   
-  const handleCapture = () => {
-    const frame = captureFrame();
+  const handleCapture = async () => {
+    const frame = await captureFrame();
     if (frame) {
       setPreviewUrl(frame);
       handleScan(frame);
       toggleCamera();
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Capture failed",
+        description: "Could not capture a frame from the camera. Try again.",
+      });
     }
   };
 
@@ -311,6 +413,20 @@ export function WasteScanner() {
                     Confidence: {(result.wasteTypeConfidence * 100).toFixed(0)}%
                   </p>
                 </div>
+                {result.detections && result.detections.length > 0 && (
+                  <div className="text-sm text-muted-foreground">
+                    <Separator className="my-2" />
+                    <p className="font-medium text-foreground">Detected</p>
+                    <ul className="mt-2 space-y-1">
+                      {result.detections.map((d, idx) => (
+                        <li key={idx} className="flex items-center justify-between gap-4">
+                          <span className="capitalize">{d.label}</span>
+                          <span>{(d.confidence * 100).toFixed(0)}%</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 

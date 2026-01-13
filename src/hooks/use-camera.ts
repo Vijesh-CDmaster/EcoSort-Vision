@@ -43,6 +43,23 @@ export function useCamera() {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Ensure metadata is available and the element is actually playing.
+        try {
+          if (videoRef.current.readyState < 1) {
+            await new Promise<void>((resolve) => {
+              const v = videoRef.current;
+              if (!v) return resolve();
+              const onLoaded = () => {
+                v.removeEventListener("loadedmetadata", onLoaded);
+                resolve();
+              };
+              v.addEventListener("loadedmetadata", onLoaded);
+            });
+          }
+          await videoRef.current.play();
+        } catch {
+          // ignore
+        }
       }
       setIsCameraOn(true);
     } catch (error) {
@@ -82,11 +99,64 @@ export function useCamera() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode]);
 
+  const waitForVideoReady = async (timeoutMs = 5000) => {
+    const video = videoRef.current;
+    if (!video) return false;
+    if (video.videoWidth && video.videoHeight) return true;
 
-  const captureFrame = () => {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (video.videoWidth && video.videoHeight) return true;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return Boolean(video.videoWidth && video.videoHeight);
+  };
+
+  const captureFrame = async () => {
+    // Prefer ImageCapture when available; it often works even when the <video> element
+    // hasn't populated videoWidth/videoHeight yet.
+    try {
+      const stream = streamRef.current;
+      const ImageCaptureCtor = (globalThis as any).ImageCapture;
+      if (stream && ImageCaptureCtor) {
+        const track = stream.getVideoTracks?.()[0];
+        if (track) {
+          const imageCapture = new ImageCaptureCtor(track);
+          const bitmap = await imageCapture.grabFrame();
+          if (canvasRef.current) {
+            const canvas = canvasRef.current;
+            canvas.width = bitmap.width;
+            canvas.height = bitmap.height;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.drawImage(bitmap, 0, 0);
+              return canvas.toDataURL("image/jpeg");
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore and fallback to video+canvas
+    }
+
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
+      // Try to nudge playback in case the browser paused it.
+      try {
+        await video.play();
+      } catch {
+        // ignore
+      }
+      const ready = await waitForVideoReady();
+      if (!ready) {
+        toast({
+          variant: "destructive",
+          title: "Camera not ready",
+          description: "Wait a moment for the video to start, then try again.",
+        });
+        return null;
+      }
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const context = canvas.getContext("2d");
