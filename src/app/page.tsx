@@ -16,13 +16,9 @@ export default function DashboardPage() {
         <StatsCards />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-3">
-          <BinMonitoring />
-        </div>
-        <div className="lg:col-span-2">
-          <SegregationPerformanceChart />
-        </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <SegregationPerformanceChart />
+        <BinMonitoring />
       </div>
       
       <div>

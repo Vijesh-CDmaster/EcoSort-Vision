@@ -14,18 +14,24 @@ const binData = [
     level: 78,
     icon: Icons.Recycling,
     color: "text-blue-500",
+    bgColor: "bg-blue-500/10",
+    progressColor: "bg-blue-500"
   },
   {
     name: "Compost",
     level: 45,
     icon: Icons.Compost,
     color: "text-green-500",
+    bgColor: "bg-green-500/10",
+    progressColor: "bg-green-500"
   },
   {
     name: "Landfill",
     level: 62,
     icon: Icons.Landfill,
     color: "text-gray-500",
+    bgColor: "bg-gray-500/10",
+    progressColor: "bg-gray-500"
   },
 ];
 
@@ -36,17 +42,13 @@ export function BinMonitoring() {
         <CardTitle>Bin Monitoring</CardTitle>
         <CardDescription>Real-time waste bin fullness levels.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="grid gap-6 sm:grid-cols-3">
         {binData.map((bin) => (
-          <div key={bin.name}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <bin.icon className={`w-5 h-5 ${bin.color}`} />
-                <span className="font-medium">{bin.name}</span>
-              </div>
-              <span className="text-sm text-muted-foreground">{bin.level}% Full</span>
-            </div>
-            <Progress value={bin.level} aria-label={`${bin.name} bin fullness`} />
+          <div key={bin.name} className={`p-4 rounded-lg flex flex-col items-center justify-center text-center ${bin.bgColor}`}>
+            <bin.icon className={`w-10 h-10 ${bin.color}`} />
+            <span className="text-lg font-bold mt-4">{bin.name}</span>
+            <span className="text-2xl font-bold">{bin.level}%</span>
+            <Progress value={bin.level} aria-label={`${bin.name} bin fullness`} className="mt-2 h-2" indicatorClassName={bin.progressColor} />
           </div>
         ))}
       </CardContent>
