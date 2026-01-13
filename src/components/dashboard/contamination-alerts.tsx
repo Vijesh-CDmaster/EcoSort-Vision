@@ -102,6 +102,16 @@ const severityVariant: Record<Alert["severity"], "default" | "secondary" | "dest
     critical: "destructive",
 }
 
+const FormattedDate = ({ timestamp }: { timestamp: string }) => {
+  const [formattedDate, setFormattedDate] = React.useState('');
+
+  React.useEffect(() => {
+    setFormattedDate(new Date(timestamp).toLocaleString());
+  }, [timestamp]);
+
+  return <div>{formattedDate}</div>;
+};
+
 export const columns: ColumnDef<Alert>[] = [
   {
     accessorKey: "type",
@@ -137,7 +147,7 @@ export const columns: ColumnDef<Alert>[] = [
         </Button>
       );
     },
-    cell: ({ row }) => <div>{new Date(row.getValue("timestamp")).toLocaleString()}</div>,
+    cell: ({ row }) => <FormattedDate timestamp={row.getValue("timestamp")} />,
   },
   {
     accessorKey: "status",
