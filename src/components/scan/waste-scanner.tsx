@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -23,6 +23,15 @@ type ScanResult = {
   binConfidence: number;
   imageUrl: string;
   detections?: Array<{ label: string; confidence: number }>;
+};
+
+type YoloStableVote = {
+  label: string;
+  votes: number;
+  window: number;
+  frames: number;
+  ready: boolean;
+  isStable: boolean;
 };
 
 function guessBinFromLabel(label: string): "recycling" | "compost" | "landfill" {
@@ -67,16 +76,22 @@ export function WasteScanner() {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [tab, setTab] = useState<"upload" | "camera">("upload");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [recentScans, setRecentScans] = useState<ScanResult[]>([]);
   const { addScan } = useScanStore();
+  const scanStreamIdRef = useRef<string>("camera");
+  const streamInFlightRef = useRef(false);
+  const [isCameraScanning, setIsCameraScanning] = useState(false);
   
   const {
     videoRef,
     canvasRef,
     isCameraOn,
     hasCameraPermission,
+    startCamera,
+    stopCamera,
     toggleCamera,
     captureFrame,
     flipCamera,
@@ -111,11 +126,18 @@ export function WasteScanner() {
     }
   };
   
-  const handleScan = async (imageUrl: string | null) => {
+  const handleScan = useCallback(async (
+    imageUrl: string | null,
+    opts?: { source?: "upload" | "camera"; streaming?: boolean }
+  ) => {
     if (!imageUrl) return;
 
-    setIsLoading(true);
-    setResult(null);
+    const source: "upload" | "camera" = opts?.source ?? (isCameraOn ? "camera" : "upload");
+
+    if (!opts?.streaming) {
+      setIsLoading(true);
+      setResult(null);
+    }
     try {
       // Classify using the local YOLO model service.
       let newResult: ScanResult | null = null;
@@ -125,15 +147,41 @@ export function WasteScanner() {
         const yoloRes = await fetch("/api/yolo/predict", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ image: imageUrl }),
+          body: JSON.stringify({
+            image: imageUrl,
+            source,
+            vote: source === "camera",
+            streamId: source === "camera" ? scanStreamIdRef.current : undefined,
+            voteWindow: source === "camera" ? 5 : undefined,
+            voteMin: source === "camera" ? 3 : undefined,
+          }),
         });
 
         if (yoloRes.ok) {
           const yoloData = await yoloRes.json();
           const top = yoloData?.top;
           const detections = Array.isArray(yoloData?.detections) ? yoloData.detections : [];
+          const stable = (yoloData?.stable ?? null) as YoloStableVote | null;
 
-          if (top?.label) {
+          const stableLabel = stable?.label && typeof stable.label === "string" ? stable.label : null;
+          const useStable = source === "camera" && stableLabel;
+
+          if (useStable) {
+            const wasteType = String(stableLabel);
+            const wasteTypeConfidence = stable?.isStable ? Math.min(1, Math.max(0, Number(stable.votes) / Number(stable.window))) : 0;
+            const binSuggestion = guessBinFromLabel(wasteType);
+
+            newResult = {
+              wasteType,
+              wasteTypeConfidence,
+              binSuggestion,
+              binConfidence: wasteTypeConfidence,
+              imageUrl,
+              detections: detections
+                .slice(0, 5)
+                .map((d: any) => ({ label: String(d.label), confidence: Number(d.confidence ?? 0) })),
+            };
+          } else if (top?.label) {
             const wasteType = String(top.label);
             const wasteTypeConfidence = Number(top.confidence ?? 0);
             const binSuggestion = guessBinFromLabel(wasteType);
@@ -161,11 +209,13 @@ export function WasteScanner() {
                 .slice(0, 5)
                 .map((d: any) => ({ label: String(d.label), confidence: Number(d.confidence ?? 0) })),
             };
-            toast({
-              variant: "destructive",
-              title: "No Detection",
-              description: yoloFailure,
-            });
+            if (!opts?.streaming) {
+              toast({
+                variant: "destructive",
+                title: "No Detection",
+                description: yoloFailure,
+              });
+            }
           }
         } else {
           const err = await yoloRes.json().catch(() => null);
@@ -183,9 +233,125 @@ export function WasteScanner() {
       }
       
       setResult(newResult);
-      setRecentScans(prev => [newResult, ...prev.slice(0, 4)]);
+
+      const shouldPersist = !opts?.streaming || (newResult.wasteType !== "Thinking..." && newResult.wasteType !== "unknown" && newResult.wasteTypeConfidence > 0);
+      if (shouldPersist) {
+        setRecentScans(prev => [newResult, ...prev.slice(0, 4)]);
+        addScan({
+          source,
+          wasteType: newResult.wasteType,
+          wasteTypeConfidence: newResult.wasteTypeConfidence,
+          binSuggestion: newResult.binSuggestion,
+          binConfidence: newResult.binConfidence,
+          imageUrl: newResult.imageUrl,
+          detections: newResult.detections,
+        });
+      }
+
+    } catch (error) {
+      console.error("AI classification failed:", error);
+      if (!opts?.streaming) {
+        toast({
+          variant: "destructive",
+          title: "Scan Failed",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Could not classify the item. Ensure the YOLO service is running (http://127.0.0.1:8000/health).",
+        });
+      }
+    } finally {
+      if (!opts?.streaming) {
+        setIsLoading(false);
+      }
+    }
+  }, [addScan, isCameraOn, toast]);
+  
+  const handleCapture = async () => {
+    if (isCameraScanning) return;
+    setIsCameraScanning(true);
+    setIsLoading(true);
+    setResult(null);
+
+    // New stream id per scan burst (keeps vote buffer clean)
+    try {
+      scanStreamIdRef.current = crypto.randomUUID();
+    } catch {
+      scanStreamIdRef.current = String(Date.now());
+    }
+
+    const FRAMES = 5;
+    const INTERVAL_MS = 250;
+
+    let lastFrame: string | null = null;
+    let finalStable: YoloStableVote | null = null;
+    let finalDetections: Array<{ label: string; confidence: number }> = [];
+
+    try {
+      for (let i = 0; i < FRAMES; i++) {
+        const frame = await captureFrame();
+        if (!frame) {
+          await new Promise((r) => setTimeout(r, INTERVAL_MS));
+          continue;
+        }
+        lastFrame = frame;
+
+        // Use the same /api/yolo/predict route so everything stays consistent.
+        const yoloRes = await fetch("/api/yolo/predict", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            image: frame,
+            conf: 0.45,
+            source: "camera",
+            vote: true,
+            streamId: scanStreamIdRef.current,
+            voteWindow: FRAMES,
+            voteMin: 3,
+          }),
+        });
+
+        if (yoloRes.ok) {
+          const yoloData = await yoloRes.json();
+          const stable = (yoloData?.stable ?? null) as YoloStableVote | null;
+          const detections = Array.isArray(yoloData?.detections) ? yoloData.detections : [];
+          finalDetections = detections
+            .slice(0, 5)
+            .map((d: any) => ({ label: String(d.label), confidence: Number(d.confidence ?? 0) }));
+
+          if (stable) {
+            finalStable = stable;
+            // If backend says window is ready, we can stop early.
+            if (stable.ready) break;
+          }
+        }
+
+        await new Promise((r) => setTimeout(r, INTERVAL_MS));
+      }
+
+      if (!lastFrame) {
+        throw new Error("Could not capture frames from camera");
+      }
+      setPreviewUrl(lastFrame);
+
+      const label = finalStable?.label && finalStable.label !== "Thinking..." ? finalStable.label : "unknown";
+      const votes = Number(finalStable?.votes ?? 0);
+      const window = Number(finalStable?.window ?? FRAMES);
+      const voteConfidence = window > 0 ? Math.min(1, Math.max(0, votes / window)) : 0;
+
+      const newResult: ScanResult = {
+        wasteType: label,
+        wasteTypeConfidence: voteConfidence,
+        binSuggestion: guessBinFromLabel(label),
+        binConfidence: voteConfidence,
+        imageUrl: lastFrame,
+        detections: finalDetections,
+      };
+
+      setResult(newResult);
+      setRecentScans((prev) => [newResult, ...prev.slice(0, 4)]);
       addScan({
-        source: isCameraOn ? "camera" : "upload",
+        source: "camera",
         wasteType: newResult.wasteType,
         wasteTypeConfidence: newResult.wasteTypeConfidence,
         binSuggestion: newResult.binSuggestion,
@@ -193,36 +359,29 @@ export function WasteScanner() {
         imageUrl: newResult.imageUrl,
         detections: newResult.detections,
       });
-
-    } catch (error) {
-      console.error("AI classification failed:", error);
+    } catch (e) {
       toast({
         variant: "destructive",
         title: "Scan Failed",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Could not classify the item. Ensure the YOLO service is running (http://127.0.0.1:8000/health).",
+        description: e instanceof Error ? e.message : "Camera scan failed",
       });
     } finally {
       setIsLoading(false);
+      setIsCameraScanning(false);
     }
   };
-  
-  const handleCapture = async () => {
-    const frame = await captureFrame();
-    if (frame) {
-      setPreviewUrl(frame);
-      handleScan(frame);
-      toggleCamera();
+
+  // No continuous scanning: camera capture runs only when user taps the capture button.
+
+  // Start/stop camera when switching tabs.
+  useEffect(() => {
+    if (tab === "camera") {
+      startCamera();
     } else {
-      toast({
-        variant: "destructive",
-        title: "Capture failed",
-        description: "Could not capture a frame from the camera. Try again.",
-      });
+      stopCamera();
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   const handleDragEvents = (e: React.DragEvent<HTMLDivElement>, isEntering: boolean) => {
     e.preventDefault();
@@ -250,12 +409,12 @@ export function WasteScanner() {
     <div className="space-y-6">
       <Card>
         <CardContent className="p-6">
-          <Tabs defaultValue="upload">
+          <Tabs value={tab} onValueChange={(v) => setTab(v as "upload" | "camera")}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="upload">
                 <Upload className="mr-2 h-4 w-4" /> Upload Image
               </TabsTrigger>
-              <TabsTrigger value="camera" onClick={toggleCamera} disabled={!hasCameraPermission && !isCameraOn}>
+              <TabsTrigger value="camera" disabled={hasCameraPermission === false}>
                 <Video className="mr-2 h-4 w-4" /> Live Camera
               </TabsTrigger>
             </TabsList>

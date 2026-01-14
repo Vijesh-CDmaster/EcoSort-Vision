@@ -11,6 +11,25 @@ export function useCamera() {
   const streamRef = useRef<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
   const { toast } = useToast();
+  const restartOnFacingModeChangeRef = useRef(false);
+
+  type ImageCaptureConstructor = new (track: MediaStreamTrack) => {
+    grabFrame: () => Promise<ImageBitmap>;
+  };
+
+  const attachStreamToVideo = async () => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream) return;
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+    try {
+      await video.play();
+    } catch {
+      // ignore autoplay/play errors; user gesture may be required in some browsers
+    }
+  };
 
   useEffect(() => {
     const getCameraPermission = async () => {
@@ -41,26 +60,6 @@ export function useCamera() {
         video: { facingMode: facingMode }
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        // Ensure metadata is available and the element is actually playing.
-        try {
-          if (videoRef.current.readyState < 1) {
-            await new Promise<void>((resolve) => {
-              const v = videoRef.current;
-              if (!v) return resolve();
-              const onLoaded = () => {
-                v.removeEventListener("loadedmetadata", onLoaded);
-                resolve();
-              };
-              v.addEventListener("loadedmetadata", onLoaded);
-            });
-          }
-          await videoRef.current.play();
-        } catch {
-          // ignore
-        }
-      }
       setIsCameraOn(true);
     } catch (error) {
       console.error("Error starting camera:", error);
@@ -76,6 +75,14 @@ export function useCamera() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
     }
+    streamRef.current = null;
+    if (videoRef.current) {
+      try {
+        videoRef.current.srcObject = null;
+      } catch {
+        // ignore
+      }
+    }
     setIsCameraOn(false);
   };
 
@@ -88,16 +95,25 @@ export function useCamera() {
   };
 
   const flipCamera = () => {
+    restartOnFacingModeChangeRef.current = isCameraOn;
     stopCamera();
     setFacingMode(prev => (prev === "user" ? "environment" : "user"));
   };
   
   useEffect(() => {
-    if (facingMode && !isCameraOn) {
-        startCamera();
-    }
+    if (!restartOnFacingModeChangeRef.current) return;
+    restartOnFacingModeChangeRef.current = false;
+    startCamera();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode]);
+
+  // When the camera turns on, the <video> element is mounted in the UI.
+  // Attach the already-created stream at that point.
+  useEffect(() => {
+    if (!isCameraOn) return;
+    attachStreamToVideo();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCameraOn]);
 
   const waitForVideoReady = async (timeoutMs = 5000) => {
     const video = videoRef.current;
@@ -117,7 +133,7 @@ export function useCamera() {
     // hasn't populated videoWidth/videoHeight yet.
     try {
       const stream = streamRef.current;
-      const ImageCaptureCtor = (globalThis as any).ImageCapture;
+      const ImageCaptureCtor = (globalThis as unknown as { ImageCapture?: ImageCaptureConstructor }).ImageCapture;
       if (stream && ImageCaptureCtor) {
         const track = stream.getVideoTracks?.()[0];
         if (track) {
@@ -181,6 +197,8 @@ export function useCamera() {
     hasCameraPermission,
     videoRef,
     canvasRef,
+    startCamera,
+    stopCamera,
     toggleCamera,
     captureFrame,
     flipCamera,
